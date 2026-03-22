@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+*.so
+*.dylib
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# PyCharm
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Distribution / packaging
+*.whl
+*.tar.gz
+MANIFEST
+
+# pyslm compiled artefacts (handled by pyslm's own .gitignore)
+pyslm/build/
+pyslm/dist/
+pyslm/*.egg-info/
