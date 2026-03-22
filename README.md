@@ -46,23 +46,72 @@ Layer  ──── ContourGeometry + HatchGeometry (x0,y0→x1,y1 pairs)
 
 ---
 
+## Example slice outputs
+
+All images below are generated from `frameGuide.stl` (41 mm tall) by `generate_docs_images.py`.
+
+### Strategy comparison — Stripe vs Island at three layer heights
+
+Orange lines = hatch infill vectors · Blue lines = contour boundary passes
+
+![Scan strategy comparison](docs/images/slice_strategy_comparison.png)
+
+Both strategies use the same laser parameters (200 W, 200 mm/s, 0.08 mm hatch offset).
+The island hatcher breaks the layer into 3×3 mm checkerboard cells and scans them in a
+randomised order, distributing thermal energy more evenly than the stripe approach.
+
+---
+
+### Scan-vector order visualisation — Island hatcher at z = 20 mm
+
+Colour encodes execution order (purple = first, yellow = last).
+Dashed grey lines are jump moves (laser off, repositioning).
+
+![Scan order](docs/images/slice_scan_order.png)
+
+**Measured stats for this layer** (z = 20.5 mm, island hatcher, AlternateSort):
+
+| Metric | Value |
+|--------|-------|
+| Total scan path | 41 082 mm |
+| Total jump distance | 4 589 mm |
+| Estimated layer time | 206 s |
+| Scan efficiency | **90 %** |
+
+A 90 % efficiency means the laser is actively melting material for 9 out of every 10 mm
+of motion — well within the acceptable range for industrial SLM.
+
+---
+
+### Multi-layer stack — 10 layers, hatch angle rotated 18° per layer
+
+![Multi-layer stack](docs/images/slice_multilayer.png)
+
+Rotating the hatch angle each layer is standard practice on commercial SLM machines
+(e.g. EOS uses 67°, Renishaw uses 33°). It prevents columnar grain growth aligned
+with the scan direction, which would otherwise create anisotropic mechanical properties.
+
+---
+
 ## Repository layout
 
 ```
 .
-├── main.py              # Annotated end-to-end demo (stripe → island strategy)
-├── pyslm/               # PySLM library (git submodule, LGPL-2.1)
+├── main.py                    # Annotated end-to-end demo
+├── generate_docs_images.py    # Script that produced the images above
+├── docs/images/               # Generated slice visualisations
+├── pyslm/                     # PySLM library (git submodule, LGPL-2.1)
 │   ├── pyslm/
-│   │   ├── core.py          # Part, DocumentObject, dependency graph
-│   │   ├── geometry/        # Layer, BuildStyle, Model data classes
-│   │   ├── hatching/        # Hatch strategies + sorting algorithms
-│   │   ├── support/         # Block/truss support structure generation
-│   │   ├── analysis/        # Build-time estimation, scan iterators
-│   │   ├── visualise.py     # Matplotlib rendering helpers
-│   │   └── export.py        # Machine build-file exporters
-│   ├── examples/            # 17 runnable example scripts
-│   └── models/              # Sample STL files (frameGuide.stl, etc.)
-└── LICENSE              # MIT (this wrapper) | LGPL-2.1 (pyslm submodule)
+│   │   ├── core.py            # Part, DocumentObject, dependency graph
+│   │   ├── geometry/          # Layer, BuildStyle, Model data classes
+│   │   ├── hatching/          # Hatch strategies + sorting algorithms
+│   │   ├── support/           # Block/truss support structure generation
+│   │   ├── analysis/          # Build-time estimation, scan iterators
+│   │   ├── visualise.py       # Matplotlib rendering helpers
+│   │   └── export.py          # Machine build-file exporters
+│   ├── examples/              # 17 runnable example scripts
+│   └── models/                # Sample STL files (frameGuide.stl, etc.)
+└── LICENSE                    # MIT (this wrapper) | LGPL-2.1 (pyslm submodule)
 ```
 
 ---
@@ -74,12 +123,21 @@ Layer  ──── ContourGeometry + HatchGeometry (x0,y0→x1,y1 pairs)
 git clone --recurse-submodules https://github.com/stephen211111/openslm-slicer.git
 cd openslm-slicer
 
-# 2. Install dependencies
-pip install PythonSLM trimesh shapely numpy matplotlib
+# 2. Create a virtual environment and install dependencies
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install "numpy<2" PythonSLM trimesh shapely matplotlib
 
 # 3. Run the annotated demo
 python main.py
+
+# 4. Regenerate the documentation images
+python generate_docs_images.py
 ```
+
+> **Note on NumPy version:** PySLM's compiled extensions (PyClipper) require
+> NumPy < 2. Install `numpy<2` before the other packages to avoid
+> `_ARRAY_API not found` errors from Shapely.
 
 ---
 
@@ -89,17 +147,19 @@ python main.py
 
 | Strategy | Description | Use case |
 |----------|-------------|----------|
-| `StripeHatcher` | Divides the layer into parallel stripes; limits max scan-vector length | General-purpose, minimises long vectors that cause warping |
-| `BasicIslandHatcher` | Checkerboard grid; islands scanned in randomised order | Reduces residual stress; preferred for complex geometries |
+| `StripeHatcher` | Parallel stripes; limits max scan-vector length | General-purpose; minimises long vectors that cause warping |
+| `BasicIslandHatcher` | Checkerboard grid; randomised island order | Distributes heat; preferred for complex, dense geometries |
 | Custom (sinusoidal) | User-defined curved scan paths | Research into novel strategies |
 
 ### Scan-vector sorting
 
-After hatching, vectors are reordered to minimise the **jump distance** (laser-off repositioning moves). The included sort algorithms are:
+After hatching, vectors are reordered to minimise the **jump distance** (laser-off repositioning moves):
 
-- **AlternateSort** — reverses direction on every other vector (bidirectional)
-- **LinearSort** — sweeps monotonically in one direction
-- **FlipSort** — groups vectors by proximity
+| Algorithm | Behaviour |
+|-----------|-----------|
+| `AlternateSort` | Reverses direction on every other vector (bidirectional) |
+| `LinearSort` | Sweeps monotonically in one direction |
+| `FlipSort` | Groups vectors by proximity |
 
 ### BuildStyle parameters
 
@@ -108,13 +168,14 @@ After hatching, vectors are reordered to minimise the **jump distance** (laser-o
 | `laserPower` | 100–400 W | Melt pool size and depth |
 | `laserSpeed` | 200–2000 mm/s | Energy density (J/mm³) |
 | `spotCompensation` | 0.04–0.1 mm | Dimensional accuracy |
-| `pointDistance` | 20–80 µm | Overlap between exposure points (pulsed mode) |
+| `pointDistance` | 20–80 µm | Exposure point overlap (pulsed mode) |
+| `jumpSpeed` | 2000–7000 mm/s | Repositioning speed (no lasing) |
 
 ---
 
 ## License
 
-- `main.py` and all files in this wrapper repository: **MIT License** — see [LICENSE](LICENSE)
+- `main.py`, `generate_docs_images.py`, `README.md` and all files in this wrapper: **MIT License** — see [LICENSE](LICENSE)
 - `pyslm/` submodule: **GNU Lesser General Public License v2.1** — see [pyslm/LICENSE](pyslm/LICENSE)
 
 Original PySLM library © Luke Parry — https://github.com/drlukeparry/pyslm

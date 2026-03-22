@@ -4,6 +4,23 @@ OpenSLM Slicer — Portfolio Demo
 Author: Stefan Dobrowolski
 License: MIT (wrapper) | LGPL-2.1 (pyslm library)
 
+PATH NOTE
+---------
+The `pyslm/` directory at the project root is the upstream source submodule
+(for reference / study).  Its empty root __init__.py would shadow the
+installed PythonSLM package, so we strip the project root and the implicit
+'' (cwd) entry from sys.path before any pyslm import, ensuring Python
+resolves `import pyslm` to the compiled package in site-packages.
+"""
+import sys
+import os
+
+_project_root = os.path.dirname(os.path.abspath(__file__))
+sys.path = [
+    p for p in sys.path
+    if p != "" and os.path.normcase(p) != os.path.normcase(_project_root)
+]
+
 Overview
 --------
 This script demonstrates the core workflow of preparing a 3D CAD model (STL)
